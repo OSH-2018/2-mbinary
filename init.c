@@ -8,7 +8,7 @@
         implemented some shell cmds and features;
         including:
             cmds: pwd,ls, cd ,cat, env, export , unset, 
-            features: \,  |  < >   >>   ;   &
+            features: \  |  < >   >>   ;   & " ' quote handle \t redundent blank
  ************************************************************************/
 
 #include <unistd.h>
@@ -30,7 +30,7 @@
 
 #define FORK_ERROR 2
 #define EXEC_ERROR 3
-
+#define WRONG_INPUT 4
 struct cmd{
     struct cmd * next;
     int begin,end;  // pos in cmdStr
@@ -46,14 +46,15 @@ int cmdNum;
 char cmdStr[MAX_CMD_LENGTH];    
 
 void Error(int n);
+void debug(struct cmd*);
 void init(struct cmd*);
 void setIO(struct cmd*,int ,int );
-int getInput();
-int parseCmds(int);
-int getPath(char *,int);
-int parseArgs();
-int execInner(struct cmd*);
-int execOuter(struct cmd*);
+int  getInput();
+int  parseCmds(int);
+int  getPath(char *,int);
+int  parseArgs();
+int  execInner(struct cmd*);
+int  execOuter(struct cmd*);
 
 
 int main(){
@@ -64,9 +65,10 @@ int main(){
         int n = getInput();
         if(n<=0)continue;  
         parseCmds(n);
-        parseArgs();
+        if(parseArgs()<0)continue;
         for(int i=0;i<cmdNum;++i){
             struct cmd *pcmd=cmdinfo+i, * tmp;
+            //debug(pcmd);
             //pcmd = reverse(pcmd);
             int status = execInner(pcmd);
             if(status==1){
@@ -107,6 +109,7 @@ void Error(int n){
     switch(n){
         case FORK_ERROR:printf("fork error\n");break;
         case EXEC_ERROR:printf("exec error\n");break;
+		default:printf("Error, exit ...\n");
     }
     exit(1);
 }
@@ -152,10 +155,7 @@ int  parseCmds(int n){
                     head->bgExec=1;
                 }
             }
-            case '\"':{
-                cmdStr[i]=' ';
-                break;
-            }
+			case '\t':cmdStr[i]=' ';break;
             case ';':{//including  ';'  a new cmdStr
                 beginCmd = 0;
                 cmdStr[i]='\0';  
@@ -190,52 +190,68 @@ int getPath(char *path,int p){
     return p-1;
 }
 
+
 int parseArgs(){
     /* get args of each cmd and  create cmd-node seperated by pipe */
-    int ct=0;
-    char beginItem=0;
+    char beginItem=0,beginQuote=0,c;
+	int begin,end;
+	struct cmd* pcmd;
     for(int p=0;p<cmdNum;++p){
-        struct cmd * pcmd=&cmdinfo[p];
-        int begin = pcmd->begin,end = pcmd->end;
+		if(beginQuote||beginItem){
+			return -1;  // wrong cmdStr
+		}
+        pcmd=&cmdinfo[p];
+        begin = pcmd->begin,end = pcmd->end;
         init(pcmd);// initalize 
         for(int i=begin;i<end;++i){
-            if(cmdStr[i]==' '||cmdStr[i]=='\0'){
-                if(beginItem){
-                    beginItem=0;
-                    cmdStr[i]='\0';
-                }
-            }else if(cmdStr[i]=='<'){
+            c = cmdStr[i];
+			if((c=='\"'|| c=='\'')&&cmdStr[i-1]!='\\'){
+				if(beginQuote){
+					beginQuote=beginItem=0;
+					cmdStr[i]='\0';
+				}else{
+					beginQuote=1;
+					pcmd->args[pcmd->argc++]=cmdStr+i+1;
+				}
+                continue;
+			}else if(beginQuote)continue;
+            
+            if(c=='<'||c=='>'||c=='|'){
+                if(beginItem)beginItem=0;
+                cmdStr[i]='\0';
+            }
+            if(c=='<'){
                 if(cmdStr[i+1]=='<'){
                     pcmd->lredir+=2;  //<<
-                    cmdStr[i+1]=cmdStr[i]=' ';
+                    cmdStr[i+1]=' ';
                 }else{
                     pcmd->lredir+=1;  //<
-                    cmdStr[i]=' ';
                 }
                 int tmp = getPath(pcmd->fromFile,i);
                 if(tmp<=0)continue;       // no redirect file
-                if(beginItem)beginItem=0;  //dont't forget
                 i = tmp;
-            }else if(cmdStr[i]=='>'){
+            }else if(c=='>'){
                 if(cmdStr[i+1]=='>'){
                     pcmd->rredir+=2;  //>>
-                    cmdStr[i+1]=cmdStr[i]=' ';
+                    cmdStr[i+1]=' ';
                 }else{
                     pcmd->rredir+=1;  //>
-                    cmdStr[i]=' ';
                 }
                 int tmp = getPath(pcmd->toFile,i);
                 if(tmp<=0)continue;
-                if(beginItem)beginItem=0;
                 i = tmp;
-            }else if (cmdStr[i]=='|'){
+            }else if (c=='|'){
                 /*when encountering pipe | , create new cmd node chained after the fommer one   */
-                beginItem=0;
-                cmdStr[i]='\0';
                 pcmd->end = i;
                 pcmd->next = (struct cmd*)malloc(sizeof(struct cmd));
                 pcmd = pcmd->next;
                 init(pcmd);
+            }else if(c==' '||c=='\0'){
+                if(beginItem){
+                    beginItem=0;
+                    cmdStr[i]='\0';
+                }
+                continue;
             }else{
                 if(pcmd->begin==-1)pcmd->begin=i;
                 if(!beginItem){
@@ -382,4 +398,12 @@ int ENV(){
         printf("%s\n",*(env++));
     }
     return 0;
+}
+void debug(struct cmd* pcmd){
+    for(struct cmd*p = pcmd;p;p=p->next){
+        printf("****************\n");
+        for(int i=0;i<p->argc;++i){
+            printf("args[%d]:%s\n",i+1,p->args[i]);
+        }
+    }
 }

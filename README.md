@@ -5,19 +5,21 @@
 
 including:
 * cmds:
-	- pwd
-	- ls
-	- cd
-	- cat
-	- env
-	- export
-	- unset
+	- `pwd`
+	- `ls`
+	- `cd`
+	- `cat`
+	- `env`
+	- `export`
+	- `unset`
 * features:
-	- \ multi-line input
-	- |  pipe
-	- < >   >>  redirect
-	-  ; multi-cmd
-	-  & background
+	- `\t` support redundant blan
+	- `" '` support quote
+	- `\` multi-line input
+	- `|`  pipe
+	- `< >   >>`  redirect
+	-  `;` multi-cmd
+	-  `&` background
 
 ## Visual
 ![](src/shell.png)
