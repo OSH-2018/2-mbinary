@@ -18,8 +18,9 @@ including:
 	- `\` multi-line input
 	- `|`  pipe
 	- `< >   >>`  redirect
-	-  `;` multi-cmd
-	-  `&` background
+	- `;` multi-cmd
+	- `&` background
+	- `$` support varible: echo ".. $VAR "
 
 ## Visual
 ![](src/shell.png)
