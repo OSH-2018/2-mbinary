@@ -13,7 +13,7 @@ including:
 	- `export`
 	- `unset`
 * features:
-	- `\t` support redundant blan
+	- `\t` support redundant blank(\t, spaces)
 	- `" '` support quote
 	- `\` multi-line input
 	- `|`  pipe
