@@ -40,7 +40,7 @@ struct cmd{
     char lredir,rredir; ////0:no redirect  1 <,>   ;  2  >>
     char toFile[MAX_PATH_LENGTH],fromFile[MAX_PATH_LENGTH];  // redirect file path
     char *args[MAX_ARG_NUM];
-    char bgExec;
+    char bgExec;   //failExec
 };
 
 struct cmd cmdinfo[MAX_CMD_NUM];
@@ -199,20 +199,25 @@ int handleVar(struct cmd *pcmd,int n){
     char * arg = pcmd->args[n];
     int p_arg=0,p_var=0;
     while(arg[p_arg]){
-        if(arg[p_arg]=='$'){
+        if((arg[p_arg]=='$')&&(arg[p_arg-1]!='\\')){
             if(arg[p_arg+1]=='{')p_arg+=2;
             else p_arg+=1;
-            char arr[MAX_VAR_LENGTH],*tmp=arr;
+            char *tmp=&envVar[varNum][p_var];
             int ct=0;
-            while(tmp[ct]=arg[p_arg++]){
-                if(tmp[ct]==' '||tmp[ct]=='\n'||tmp[ct]=='\0'||tmp[ct]=='}')break;
-                ++ct;
+            while(tmp[ct]=arg[p_arg]){
+                if(tmp[ct]=='}'){
+                    ++p_arg;
+                    break;
+                }
+                if(tmp[ct]==' '||tmp[ct]=='\n'||tmp[ct]=='\0')break;
+                ++ct,++p_arg;
             }
             tmp[ct]='\0';
             tmp = getenv(tmp);
-            for(ct=0;envVar[varNum][p_var++]=tmp[ct++];);
+            for(int i=0;envVar[varNum][p_var++]=tmp[i++];);
+            p_var-=1; //necessary
         }
-        envVar[varNum][p_var++]=arg[p_arg++];
+        else envVar[varNum][p_var++]=arg[p_arg++];
     }
     envVar[varNum][p_var]='\0';
     pcmd->args[n] = envVar[varNum++];
@@ -221,11 +226,11 @@ int handleVar(struct cmd *pcmd,int n){
 
 int parseArgs(){
     /* get args of each cmd and  create cmd-node seperated by pipe */
-    char beginItem=0,beginQuote=0,hasVar=0,c;
+    char beginItem=0,beginQuote=0,beginDoubleQuote=0,hasVar=0,c;
 	int begin,end;
 	struct cmd* pcmd;
     for(int p=0;p<cmdNum;++p){
-		if(beginQuote||beginItem){
+		if(beginQuote||beginItem||beginDoubleQuote){
 			return -1;  // wrong cmdStr
 		}
         pcmd=&cmdinfo[p];
@@ -233,23 +238,33 @@ int parseArgs(){
         init(pcmd);// initalize 
         for(int i=begin;i<end;++i){
             c = cmdStr[i];
-			if((c=='\"'|| c=='\'')&&cmdStr[i-1]!='\\'){
-				if(beginQuote){
-					beginQuote=beginItem=0;
-					cmdStr[i]='\0';
+			if((c=='\"')&&(cmdStr[i-1]!='\\'&&(!beginQuote))){
+				if(beginDoubleQuote){
+					cmdStr[i]=beginDoubleQuote=beginItem=0;
                     if(hasVar){
                         hasVar=0;
                         handleVar(pcmd,pcmd->argc-1);  //note that is argc-1, not argc
                     }
                 }else{
-					beginQuote=1;
+					beginDoubleQuote=1;
 					pcmd->args[pcmd->argc++]=cmdStr+i+1;
 				}
                 continue;
-			}else if(beginQuote){
-                if(c=='$' &&cmdStr[i-1]!='\\'&&!hasVar)hasVar=1;
+			}else if(beginDoubleQuote){
+                if((c=='$') &&(cmdStr[i-1]!='\\')&&(!hasVar))hasVar=1;
                 continue;
             }
+            
+            if((c=='\'')&&(cmdStr[i-1]!='\\')){
+                if(beginQuote){
+					cmdStr[i]=beginQuote=beginItem=0;
+                }else{
+                    beginQuote=1;
+                    pcmd->args[pcmd->argc++]=cmdStr+i+1;
+                }
+                continue;
+            }else if(beginQuote) continue;
+            
             
             if(c=='<'||c=='>'||c=='|'){
                 if(beginItem)beginItem=0;
@@ -288,7 +303,7 @@ int parseArgs(){
                 if(pcmd->begin==-1)pcmd->begin=i;
                 if(!beginItem){
                     beginItem=1;
-                    if(c=='$' &&cmdStr[i-1]!='\\'&&!hasVar)hasVar=1;
+                    if((c=='$') &&(cmdStr[i-1]!='\\')&&(!hasVar))hasVar=1;
                     pcmd->args[pcmd->argc++]=cmdStr+i;
                 }
             }
@@ -342,7 +357,6 @@ int execInner(struct cmd* pcmd){
         exit(0);
     return 1;
 } 
-    
     
 void setIO(struct cmd *pcmd,int rfd,int wfd){
         /* settle file redirect  */
