@@ -188,8 +188,9 @@ int getItem(char *dst,char*src, int p){
     while(src[++p]==' ');
     if(src[p]=='\n')return -1; //no file 
     char c;
-    while(c=dst[ct++]=src[p++]){
+    while(c=dst[ct]=src[p]){
         if(c==' '||c=='|'||c=='<'||c=='>'||c=='\n')break;
+        ++ct,++p;
     }
     dst[ct]='\0';
     return p-1;
